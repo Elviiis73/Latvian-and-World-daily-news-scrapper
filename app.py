@@ -325,10 +325,10 @@ FEEDS = {
         "https://www.lsm.lv/rss/",
         "https://www.tvnet.lv/rss",
     ],
-    "Latvian Sports": [
+"Latvian Sports": [
+        "https://news.google.com/rss/search?q=latvijas+sports+hokejs+basketbols&hl=lv&gl=LV&ceid=LV:lv",
         "https://www.tvnet.lv/rss/sports",
-        "https://www.delfi.lv/rss/sports",
-        "https://www.lsm.lv/rss/?lang=lv&catid=15",
+    ],
     ],
     "Global News": [
         "https://feeds.bbci.co.uk/news/world/rss.xml",
