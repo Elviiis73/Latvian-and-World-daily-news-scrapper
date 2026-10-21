@@ -319,17 +319,17 @@ with h_col2:
 
 st.write("")
 
-# 4. Strict Distinct Feeds per Category
+# 4. Strictly Separated Feeds (Guarantees Sports stay in Sports and News stay in News)
 FEEDS = {
     "Latvian Major News": [
-        "https://www.lsm.lv/rss/",
+        "https://www.lsm.lv/rss/?lang=lv&catid=20",
         "https://www.delfi.lv/rss/latvija",
         "https://www.tvnet.lv/rss",
     ],
     "Latvian Sports": [
         "https://www.lsm.lv/rss/?lang=lv&catid=15",
         "https://www.delfi.lv/rss/sports",
-        "https://www.tvnet.lv/sports",
+        "https://www.tvnet.lv/rss/sports",
     ],
     "Global News": [
         "https://feeds.bbci.co.uk/news/world/rss.xml",
@@ -363,6 +363,7 @@ def get_time_ago(entry):
 def load_curated_headlines(feed_tuple, category_name):
   feed_urls = list(feed_tuple)
   raw_articles = []
+  
   for url in feed_urls:
     parsed_feed = feedparser.parse(url)
     source_name = (
@@ -381,6 +382,7 @@ def load_curated_headlines(feed_tuple, category_name):
       link = entry.get("link", "#")
       time_ago = get_time_ago(entry)
 
+      # Filter out low-quality filler globally
       if any(
           bad_word in title.lower()
           for bad_word in ["tests", "kura sēne", "horoskops", "zodiaka"]
@@ -402,59 +404,20 @@ def load_curated_headlines(feed_tuple, category_name):
           "time": time_ago,
       })
 
-  # If no client or parsing failed, return raw articles safely
-  if not client or not raw_articles:
+  # If category is Sports or Global, return directly without risky AI filtering overhead
+  if category_name in ["Latvian Sports", "Global News"]:
     return raw_articles[:30]
 
-  titles_list = "\n".join(
-      [f"{idx}: {a['title']}" for idx, a in enumerate(raw_articles)]
-  )
-
-  if category_name == "Latvian Major News":
-    filter_prompt = f"""
-        Review these headlines and select ONLY major political news, government decisions, national economy updates, security warnings, or top civil developments in Latvia.
-        STRICTLY EXCLUDE AND DROP: any sports games, team scores, athlete interviews, tournaments, lifestyle pieces, horoscopes, and quizzes.
-        Headlines:
-        {titles_list}
-        Return ONLY a comma-separated list of allowed index numbers (e.g., 0, 3, 7). No extra text.
-        """
-  elif category_name == "Latvian Sports":
-    filter_prompt = f"""
-        Review these headlines and select ONLY professional sports results, game scores, tournament rankings, medal achievements, or official competitive updates involving sports teams or athletes.
-        Headlines:
-        {titles_list}
-        Return ONLY a comma-separated list of allowed index numbers (e.g., 1, 4, 6). No extra text.
-        """
-  else:
-    filter_prompt = f"""
-        Select the major global news, international conflicts, and world economic shifts from this list:
-        {titles_list}
-        Return ONLY a comma-separated list of valid index numbers (e.g., 0, 1, 2). No extra text.
-        """
-
-  for model_name in ["gemini-2.5-flash", "gemini-2.5-flash-lite"]:
-    try:
-      response = client.models.generate_content(
-          model=model_name, contents=filter_prompt
-      )
-      indices_str = response.text.strip().replace("\n", "")
-      valid_indices = [
-          int(i.strip()) for i in indices_str.split(",") if i.strip().isdigit()
-      ]
-
-      curated = [raw_articles[i] for i in valid_indices if i < len(raw_articles)]
-      
-      # Safety fallback: If AI returns an empty list for any reason, use raw articles so tabs are never blank
-      if not curated:
-        return raw_articles[:30]
-        
-      curated_set = set(id(item) for item in curated)
-      remaining = [item for item in raw_articles if id(item) not in curated_set]
-      return curated + remaining
-    except Exception:
+  # For Major News, use a lightweight keyword filter instead of fragile index arrays
+  cleaned_news = []
+  for item in raw_articles:
+    t_lower = item["title"].lower()
+    # Explicitly skip any sports or entertainment terms that leak into major news
+    if any(sport_term in t_lower for sport_term in ["sports", "hokejs", "basketbols", "teniss", "wta", "fiiba", "spēle", "turnīrs"]):
       continue
+    cleaned_news.append(item)
 
-  return raw_articles[:30]
+  return cleaned_news if cleaned_news else raw_articles[:30]
 
 
 # Session State Initialization
