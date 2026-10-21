@@ -364,7 +364,6 @@ def get_time_ago(entry):
 
 
 @st.cache_data(ttl=300)
-@st.cache_data(ttl=300)
 def load_curated_headlines(feed_tuple, category_name):
     feed_urls = list(feed_tuple)
     raw_articles = []
@@ -372,7 +371,6 @@ def load_curated_headlines(feed_tuple, category_name):
     for url in feed_urls:
         parsed_feed = feedparser.parse(url)
         
-        # Source attribution name mapping
         source_name = "Source"
         if "lsm.lv" in url: source_name = "LSM"
         elif "delfi.lv" in url: source_name = "Delfi"
@@ -390,7 +388,6 @@ def load_curated_headlines(feed_tuple, category_name):
             summary = entry.get("summary", entry.get("description", ""))
             link = entry.get("link", "#")
             
-            # Capture exact publication timestamp for sorting
             pub_time = 0
             if hasattr(entry, "published_parsed") and entry.published_parsed:
                 pub_time = time.mktime(entry.published_parsed)
@@ -416,13 +413,12 @@ def load_curated_headlines(feed_tuple, category_name):
                 "timestamp": pub_time
             })
 
-    # Sort strictly from newest to oldest using timestamps
+    # Sort strictly from newest to oldest
     raw_articles.sort(key=lambda x: x["timestamp"], reverse=True)
 
     if category_name in ["Latvian Sports", "Global News"]:
-        return raw_articles[:40] if raw_articles else []
+        return raw_articles[:50] if raw_articles else []
 
-    # Filter out sports from Major News
     cleaned_news = []
     for item in raw_articles:
         t_lower = item["title"].lower()
@@ -430,4 +426,124 @@ def load_curated_headlines(feed_tuple, category_name):
             continue
         cleaned_news.append(item)
 
-    return cleaned_news if cleaned_news else raw_articles[:40]
+    return cleaned_news if cleaned_news else raw_articles[:50]
+
+
+# Session State Initialization
+if "selected_cat" not in st.session_state:
+    st.session_state.selected_cat = "Latvian Major News"
+
+if "visible_counts" not in st.session_state:
+    st.session_state.visible_counts = {
+        "Latvian Major News": 15,
+        "Latvian Sports": 15,
+        "Global News": 15,
+    }
+
+# Category Pills Row
+col_spacer1, nav1, nav2, nav3, col_spacer2 = st.columns([0.6, 1.2, 1.2, 1.2, 0.6])
+
+categories = [
+    ("🏛️ Latvian Major News", "Latvian Major News"),
+    ("🏆 Latvian Sports", "Latvian Sports"),
+    ("🌍 Global News", "Global News"),
+]
+nav_cols = [nav1, nav2, nav3]
+
+for col, (display_label, cat_key) in zip(nav_cols, categories):
+    with col:
+        is_active = st.session_state.selected_cat == cat_key
+        if is_active:
+            st.markdown('<div class="active-cat-pill">', unsafe_allow_html=True)
+
+        if st.button(display_label, key=f"cat_pill_{cat_key}"):
+            st.session_state.selected_cat = cat_key
+            st.rerun()
+
+        if is_active:
+            st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("<div style='margin-bottom: 1.8rem;'></div>", unsafe_allow_html=True)
+
+# Centered Main Content Stream
+active_cat = st.session_state.selected_cat
+articles = load_curated_headlines(tuple(FEEDS[active_cat]), active_cat)
+visible_count = st.session_state.visible_counts[active_cat]
+
+left_space, center_feed, right_space = st.columns([1, 2.5, 1])
+
+with center_feed:
+    displayed_articles = articles[:visible_count]
+
+    for i, article in enumerate(displayed_articles):
+        time_str = f" • {article['time']}" if article["time"] else ""
+
+        st.markdown(
+            f"""
+            <div class="news-card-box">
+                <div class="card-meta">
+                    <span class="source-badge">{article['source']}</span>
+                    <span>{time_str}</span>
+                </div>
+                <div class="card-title">{article['title']}</div>
+                <div class="card-snippet">{article['snippet']}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        b1, b2 = st.columns([1, 1])
+        with b1:
+            st.markdown(
+                f"<div style='padding-top: 0.2rem;'><a class='article-link'"
+                f" href='{article['link']}' target='_blank'>🔗 Read Full"
+                " Article</a></div>",
+                unsafe_allow_html=True,
+            )
+        with b2:
+            st.markdown('<div class="ai-btn-wrap">', unsafe_allow_html=True)
+            if st.button("✨ AI Summary", key=f"btn_{active_cat}_{i}"):
+                if client:
+                    with st.spinner("Analyzing context..."):
+                        success = False
+                        prompt = (
+                            "Summarize the core facts of this news piece concisely in 3"
+                            " bullet points. Focus strictly on major details: "
+                            f"{article['title']} -- {article['summary_raw']}"
+                        )
+                        for model_name in ["gemini-2.5-flash", "gemini-2.5-flash-lite"]:
+                            try:
+                                response = client.models.generate_content(
+                                    model=model_name,
+                                    contents=prompt,
+                                )
+                                st.info(response.text)
+                                success = True
+                                break
+                            except Exception:
+                                continue
+                        if not success:
+                            st.info(
+                                "✨ **AI Summary Snapshot:**\n\n"
+                                f"- **Core Topic:** {article['title']}\n"
+                                f"- **Details:** {article['snippet']}\n"
+                                "- *(Note: Live AI server traffic is currently peaking, showing fallback local summary).*",
+                                icon="ℹ️",
+                            )
+                else:
+                    st.error("API client not initialized.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
+
+    # Load More Button (+15 Articles)
+    if visible_count < len(articles):
+        st.write("")
+        st.markdown(
+            '<div class="ai-btn-wrap" style="text-align: center;">',
+            unsafe_allow_html=True,
+        )
+        if st.button("🔽 Load More (+15 Articles)", key=f"load_more_{active_cat}"):
+            st.session_state.visible_counts[active_cat] += 15
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
