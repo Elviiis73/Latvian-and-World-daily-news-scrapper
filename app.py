@@ -383,7 +383,7 @@ def load_curated_headlines(feed_tuple, category_name):
         elif "dw.com" in url: source_name = "DW"
         elif "google.com" in url: source_name = "Google News"
 
-        for entry in parsed_feed.entries[:30]:
+        for entry in parsed_feed.entries[:50]:
             title = entry.get("title", "No Title")
             summary = entry.get("summary", entry.get("description", ""))
             link = entry.get("link", "#")
@@ -417,7 +417,7 @@ def load_curated_headlines(feed_tuple, category_name):
     raw_articles.sort(key=lambda x: x["timestamp"], reverse=True)
 
     if category_name in ["Latvian Sports", "Global News"]:
-        return raw_articles[:50] if raw_articles else []
+        return raw_articles[:100] if raw_articles else []
 
     cleaned_news = []
     for item in raw_articles:
