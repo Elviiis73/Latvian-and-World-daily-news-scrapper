@@ -323,12 +323,22 @@ st.write("")
 FEEDS = {
     "Latvian Major News": [
         "https://www.lsm.lv/rss/",
+        "https://www.delfi.lv/rss/latvija",
         "https://www.tvnet.lv/rss",
+        "https://www.apollo.lv/rss",
     ],
-"Latvian Sports": [
+    "Latvian Sports": [
         "https://news.google.com/rss/search?q=sports+when:2d&hl=lv&gl=LV&ceid=LV:lv",
         "https://www.lsm.lv/rss/?lang=lv&catid=15",
+        "https://www.delfi.lv/rss/sports",
         "https://www.tvnet.lv/rss/sports",
+    ],
+    "Global News": [
+        "https://feeds.bbci.co.uk/news/world/rss.xml",
+        "https://rss.cnn.com/rss/edition.rss",
+        "https://news.yahoo.com/rss/world",
+        "https://www.aljazeera.com/xml/rss/all.rss",
+        "https://rss.dw.com/rdf/rss-en-world",
     ],
 }
 
