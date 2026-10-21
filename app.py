@@ -383,7 +383,7 @@ def load_curated_headlines(feed_tuple, category_name):
         elif "dw.com" in url: source_name = "DW"
         elif "google.com" in url: source_name = "Google News"
 
-        for entry in parsed_feed.entries[:50]:
+        for entry in parsed_feed.entries[:70]:
             title = entry.get("title", "No Title")
             summary = entry.get("summary", entry.get("description", ""))
             link = entry.get("link", "#")
@@ -417,7 +417,7 @@ def load_curated_headlines(feed_tuple, category_name):
     raw_articles.sort(key=lambda x: x["timestamp"], reverse=True)
 
     if category_name in ["Latvian Sports", "Global News"]:
-        return raw_articles[:100] if raw_articles else []
+        return raw_articles[:200] if raw_articles else []
 
     cleaned_news = []
     for item in raw_articles:
@@ -426,7 +426,7 @@ def load_curated_headlines(feed_tuple, category_name):
             continue
         cleaned_news.append(item)
 
-    return cleaned_news if cleaned_news else raw_articles[:50]
+    return cleaned_news if cleaned_news else raw_articles[:200]
 
 
 # Session State Initialization
@@ -435,9 +435,9 @@ if "selected_cat" not in st.session_state:
 
 if "visible_counts" not in st.session_state:
     st.session_state.visible_counts = {
-        "Latvian Major News": 15,
-        "Latvian Sports": 15,
-        "Global News": 15,
+        "Latvian Major News": 30,
+        "Latvian Sports": 30,
+        "Global News": 30,
     }
 
 # Category Pills Row
@@ -536,14 +536,14 @@ with center_feed:
 
         st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
 
-    # Load More Button (+15 Articles)
+# Load More Button - loads 30 more articles per click
     if visible_count < len(articles):
         st.write("")
         st.markdown(
             '<div class="ai-btn-wrap" style="text-align: center;">',
             unsafe_allow_html=True,
         )
-        if st.button("🔽 Load More (+15 Articles)", key=f"load_more_{active_cat}"):
-            st.session_state.visible_counts[active_cat] += 15
+        if st.button("🔽 Load More (+30 Articles)", key=f"load_more_{active_cat}"):
+            st.session_state.visible_counts[active_cat] += 30
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
