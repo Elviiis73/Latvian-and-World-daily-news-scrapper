@@ -319,7 +319,7 @@ with h_col2:
 
 st.write("")
 
-# 4. Verified Multi-Source Feeds per Category
+# 4. Strict Distinct Feeds per Category
 FEEDS = {
     "Latvian Major News": [
         "https://www.lsm.lv/rss/",
@@ -375,7 +375,7 @@ def load_curated_headlines(feed_tuple, category_name):
         )
     )
 
-    for entry in parsed_feed.entries[:30]:
+    for entry in parsed_feed.entries[:25]:
       title = entry.get("title", "No Title")
       summary = entry.get("summary", entry.get("description", ""))
       link = entry.get("link", "#")
@@ -402,56 +402,59 @@ def load_curated_headlines(feed_tuple, category_name):
           "time": time_ago,
       })
 
-  if client and raw_articles:
-    titles_list = "\n".join(
-        [f"{idx}: {a['title']}" for idx, a in enumerate(raw_articles)]
-    )
+  # If no client or parsing failed, return raw articles safely
+  if not client or not raw_articles:
+    return raw_articles[:30]
 
-    if category_name == "Latvian Major News":
-      filter_prompt = f"""
-            You are a strict national news editor for Latvia. Review these headlines:
-            {titles_list}
-            RULES:
-            - ONLY keep major political news, government decisions, national economy updates, security warnings, or top civil developments in Latvia.
-            - STRICTLY EXCLUDE AND DROP: any sports games, team scores, athlete interviews, tournaments, lifestyle pieces, horoscopes, and quizzes.
-            Return ONLY a comma-separated list of allowed index numbers (e.g., 0, 3, 7). No extra text.
-            """
-    elif category_name == "Latvian Sports":
-      filter_prompt = f"""
-            You are a professional sports editor. Review these headlines:
-            {titles_list}
-            RULES:
-            - ONLY keep professional sports results, game scores, tournament rankings, medal achievements, or official competitive updates involving Latvian sports teams or athletes.
-            Return ONLY a comma-separated list of allowed index numbers (e.g., 1, 4, 6). No extra text.
-            """
-    else:
-      filter_prompt = f"""
-            Select the major global news, international conflicts, and world economic shifts from this list:
-            {titles_list}
-            Return ONLY a comma-separated list of valid index numbers (e.g., 0, 1, 2). No extra text.
-            """
+  titles_list = "\n".join(
+      [f"{idx}: {a['title']}" for idx, a in enumerate(raw_articles)]
+  )
 
-    for model_name in ["gemini-2.5-flash", "gemini-2.5-flash-lite"]:
-      try:
-        response = client.models.generate_content(
-            model=model_name, contents=filter_prompt
-        )
-        indices_str = response.text.strip().replace("\n", "")
-        valid_indices = [
-            int(i.strip()) for i in indices_str.split(",") if i.strip().isdigit()
-        ]
+  if category_name == "Latvian Major News":
+    filter_prompt = f"""
+        Review these headlines and select ONLY major political news, government decisions, national economy updates, security warnings, or top civil developments in Latvia.
+        STRICTLY EXCLUDE AND DROP: any sports games, team scores, athlete interviews, tournaments, lifestyle pieces, horoscopes, and quizzes.
+        Headlines:
+        {titles_list}
+        Return ONLY a comma-separated list of allowed index numbers (e.g., 0, 3, 7). No extra text.
+        """
+  elif category_name == "Latvian Sports":
+    filter_prompt = f"""
+        Review these headlines and select ONLY professional sports results, game scores, tournament rankings, medal achievements, or official competitive updates involving sports teams or athletes.
+        Headlines:
+        {titles_list}
+        Return ONLY a comma-separated list of allowed index numbers (e.g., 1, 4, 6). No extra text.
+        """
+  else:
+    filter_prompt = f"""
+        Select the major global news, international conflicts, and world economic shifts from this list:
+        {titles_list}
+        Return ONLY a comma-separated list of valid index numbers (e.g., 0, 1, 2). No extra text.
+        """
 
-        curated = [
-            raw_articles[i] for i in valid_indices if i < len(raw_articles)
-        ]
-        curated_set = set(id(item) for item in curated)
-        remaining = [item for item in raw_articles if id(item) not in curated_set]
-        final_pool = curated + remaining
-        return final_pool if final_pool else raw_articles
-      except Exception:
-        continue
+  for model_name in ["gemini-2.5-flash", "gemini-2.5-flash-lite"]:
+    try:
+      response = client.models.generate_content(
+          model=model_name, contents=filter_prompt
+      )
+      indices_str = response.text.strip().replace("\n", "")
+      valid_indices = [
+          int(i.strip()) for i in indices_str.split(",") if i.strip().isdigit()
+      ]
 
-  return raw_articles
+      curated = [raw_articles[i] for i in valid_indices if i < len(raw_articles)]
+      
+      # Safety fallback: If AI returns an empty list for any reason, use raw articles so tabs are never blank
+      if not curated:
+        return raw_articles[:30]
+        
+      curated_set = set(id(item) for item in curated)
+      remaining = [item for item in raw_articles if id(item) not in curated_set]
+      return curated + remaining
+    except Exception:
+      continue
+
+  return raw_articles[:30]
 
 
 # Session State Initialization
