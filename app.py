@@ -329,7 +329,6 @@ FEEDS = {
         "https://news.google.com/rss/search?q=latvijas+sports+hokejs+basketbols&hl=lv&gl=LV&ceid=LV:lv",
         "https://www.tvnet.lv/rss/sports",
     ],
-    ],
     "Global News": [
         "https://feeds.bbci.co.uk/news/world/rss.xml",
         "https://rss.cnn.com/rss/edition.rss",
