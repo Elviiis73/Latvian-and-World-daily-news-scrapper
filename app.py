@@ -2,6 +2,7 @@ from datetime import datetime
 import time
 import feedparser
 from google import genai
+from google.genai.errors import APIError
 import requests
 import streamlit as st
 
@@ -430,24 +431,26 @@ def load_curated_headlines(feed_tuple, category_name):
             Return ONLY a comma-separated list of valid index numbers (e.g., 0, 1, 2). No extra text.
             """
 
-    try:
-      response = client.models.generate_content(
-          model="gemini-3.8-flash", contents=filter_prompt
-      )
-      indices_str = response.text.strip().replace("\n", "")
-      valid_indices = [
-          int(i.strip()) for i in indices_str.split(",") if i.strip().isdigit()
-      ]
+    # Try models with fallback to handle 503 high traffic spikes
+    for model_name in ["gemini-2.5-flash", "gemini-2.5-flash-lite"]:
+      try:
+        response = client.models.generate_content(
+            model=model_name, contents=filter_prompt
+        )
+        indices_str = response.text.strip().replace("\n", "")
+        valid_indices = [
+            int(i.strip()) for i in indices_str.split(",") if i.strip().isdigit()
+        ]
 
-      curated = [raw_articles[i] for i in valid_indices if i < len(raw_articles)]
-      
-      # Ensure we combine curated items with remaining raw articles so the pool is always large
-      curated_set = set(id(item) for item in curated)
-      remaining = [item for item in raw_articles if id(item) not in curated_set]
-      final_pool = curated + remaining
-      return final_pool if final_pool else raw_articles
-    except Exception:
-      return raw_articles
+        curated = [
+            raw_articles[i] for i in valid_indices if i < len(raw_articles)
+        ]
+        curated_set = set(id(item) for item in curated)
+        remaining = [item for item in raw_articles if id(item) not in curated_set]
+        final_pool = curated + remaining
+        return final_pool if final_pool else raw_articles
+      except Exception:
+        continue
 
   return raw_articles
 
@@ -532,25 +535,28 @@ with center_feed:
       if st.button("✨ AI Summary", key=f"btn_{active_cat}_{i}"):
         if client:
           with st.spinner("Analyzing context..."):
-            try:
-              prompt = (
-                  "Summarize the core facts of this news piece concisely in 3"
-                  " bullet points. Focus strictly on major details: "
-                  f"{article['title']} -- {article['summary_raw']}"
-              )
-              response = client.models.generate_content(
-                  model="gemini-3.8-flash",
-                  contents=prompt,
-              )
-              st.info(response.text)
-            except Exception as e:
-              if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                st.warning(
-                    "⚠️ Free tier daily limit reached. Please try again"
-                    " tomorrow."
+            success = False
+            prompt = (
+                "Summarize the core facts of this news piece concisely in 3"
+                " bullet points. Focus strictly on major details: "
+                f"{article['title']} -- {article['summary_raw']}"
+            )
+            for model_name in ["gemini-2.5-flash", "gemini-2.5-flash-lite"]:
+              try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
                 )
-              else:
-                st.error(f"An error occurred: {e}")
+                st.info(response.text)
+                success = True
+                break
+              except Exception:
+                continue
+            if not success:
+              st.error(
+                  "⚠️ Gemini servers are currently experiencing high demand"
+                  " (503 Unavailable). Please try again in a moment."
+              )
         else:
           st.error("API client not initialized.")
       st.markdown("</div>", unsafe_allow_html=True)
@@ -559,7 +565,7 @@ with center_feed:
         "<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True
     )
 
-  # Load More Button - stays available as long as there are more articles in the pool
+  # Load More Button - safely stays active across expansions
   if visible_count < len(articles):
     st.write("")
     st.markdown(
