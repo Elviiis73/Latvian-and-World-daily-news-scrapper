@@ -322,19 +322,17 @@ st.write("")
 # 4. Strictly Separated Feeds (Guarantees Sports stay in Sports and News stay in News)
 FEEDS = {
     "Latvian Major News": [
-        "https://www.lsm.lv/rss/?lang=lv&catid=20",
-        "https://www.delfi.lv/rss/latvija",
+        "https://www.lsm.lv/rss/",
         "https://www.tvnet.lv/rss",
     ],
     "Latvian Sports": [
-        "https://www.lsm.lv/rss/?lang=lv&catid=15",
-        "https://www.delfi.lv/rss/sports",
         "https://www.tvnet.lv/rss/sports",
+        "https://www.delfi.lv/rss/sports",
+        "https://www.lsm.lv/rss/?lang=lv&catid=15",
     ],
     "Global News": [
         "https://feeds.bbci.co.uk/news/world/rss.xml",
         "https://rss.cnn.com/rss/edition.rss",
-        "https://news.yahoo.com/rss/world",
     ],
 }
 
@@ -408,12 +406,15 @@ def load_curated_headlines(feed_tuple, category_name):
   if category_name in ["Latvian Sports", "Global News"]:
     return raw_articles[:30]
 
-  # For Major News, use a lightweight keyword filter instead of fragile index arrays
+# If category is Sports or Global, return items directly
+  if category_name in ["Latvian Sports", "Global News"]:
+    return raw_articles[:30] if raw_articles else []
+
+  # For Major News, filter out sports keywords cleanly
   cleaned_news = []
   for item in raw_articles:
     t_lower = item["title"].lower()
-    # Explicitly skip any sports or entertainment terms that leak into major news
-    if any(sport_term in t_lower for sport_term in ["sports", "hokejs", "basketbols", "teniss", "wta", "fiiba", "spēle", "turnīrs"]):
+    if any(sport_term in t_lower for sport_term in ["sports", "hokejs", "basketbols", "teniss", "wta", "fiiba", "spēle"]):
       continue
     cleaned_news.append(item)
 
