@@ -319,7 +319,7 @@ with h_col2:
 
 st.write("")
 
-# 4. Multi-Source Feeds per Category (LSM, Delfi, TVNET included)
+# 4. Multi-Source Feeds per Category
 FEEDS = {
     "Latvian Major News": [
         "https://www.lsm.lv/rss/?lang=lv&catid=20",
@@ -432,7 +432,7 @@ def load_curated_headlines(feed_tuple, category_name):
 
     try:
       response = client.models.generate_content(
-          model="gemini-2.5-flash", contents=filter_prompt
+          model="gemini-3.8-flash", contents=filter_prompt
       )
       indices_str = response.text.strip().replace("\n", "")
       valid_indices = [
@@ -440,11 +440,16 @@ def load_curated_headlines(feed_tuple, category_name):
       ]
 
       curated = [raw_articles[i] for i in valid_indices if i < len(raw_articles)]
-      return curated if curated else raw_articles[:30]
+      
+      # Ensure we combine curated items with remaining raw articles so the pool is always large
+      curated_set = set(id(item) for item in curated)
+      remaining = [item for item in raw_articles if id(item) not in curated_set]
+      final_pool = curated + remaining
+      return final_pool if final_pool else raw_articles
     except Exception:
-      return raw_articles[:30]
+      return raw_articles
 
-  return raw_articles[:30]
+  return raw_articles
 
 
 # Session State Initialization
@@ -534,7 +539,7 @@ with center_feed:
                   f"{article['title']} -- {article['summary_raw']}"
               )
               response = client.models.generate_content(
-                  model="gemini-2.5-flash",
+                  model="gemini-3.8-flash",
                   contents=prompt,
               )
               st.info(response.text)
@@ -554,7 +559,7 @@ with center_feed:
         "<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True
     )
 
-  # Load More Button - safely checks remaining length so it won't disappear prematurely
+  # Load More Button - stays available as long as there are more articles in the pool
   if visible_count < len(articles):
     st.write("")
     st.markdown(
