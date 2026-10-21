@@ -364,190 +364,70 @@ def get_time_ago(entry):
 
 
 @st.cache_data(ttl=300)
+@st.cache_data(ttl=300)
 def load_curated_headlines(feed_tuple, category_name):
-  feed_urls = list(feed_tuple)
-  raw_articles = []
-  
-  for url in feed_urls:
-    parsed_feed = feedparser.parse(url)
-    source_name = (
-        "LSM"
-        if "lsm.lv" in url
-        else (
-            "Delfi"
-            if "delfi.lv" in url
-            else "TVNET" if "tvnet.lv" in url else "BBC" if "bbci.co.uk" in url else "CNN" if "cnn.com" in url else "Yahoo"
-        )
-    )
+    feed_urls = list(feed_tuple)
+    raw_articles = []
+    
+    for url in feed_urls:
+        parsed_feed = feedparser.parse(url)
+        
+        # Source attribution name mapping
+        source_name = "Source"
+        if "lsm.lv" in url: source_name = "LSM"
+        elif "delfi.lv" in url: source_name = "Delfi"
+        elif "tvnet.lv" in url: source_name = "TVNET"
+        elif "apollo.lv" in url: source_name = "Apollo"
+        elif "bbci.co.uk" in url: source_name = "BBC"
+        elif "cnn.com" in url: source_name = "CNN"
+        elif "yahoo.com" in url: source_name = "Yahoo"
+        elif "aljazeera.com" in url: source_name = "Al Jazeera"
+        elif "dw.com" in url: source_name = "DW"
+        elif "google.com" in url: source_name = "Google News"
 
-    for entry in parsed_feed.entries[:25]:
-      title = entry.get("title", "No Title")
-      summary = entry.get("summary", entry.get("description", ""))
-      link = entry.get("link", "#")
-      time_ago = get_time_ago(entry)
+        for entry in parsed_feed.entries[:30]:
+            title = entry.get("title", "No Title")
+            summary = entry.get("summary", entry.get("description", ""))
+            link = entry.get("link", "#")
+            
+            # Capture exact publication timestamp for sorting
+            pub_time = 0
+            if hasattr(entry, "published_parsed") and entry.published_parsed:
+                pub_time = time.mktime(entry.published_parsed)
+                
+            time_ago = get_time_ago(entry)
 
-      # Filter out low-quality filler globally
-      if any(
-          bad_word in title.lower()
-          for bad_word in ["tests", "kura sēne", "horoskops", "zodiaka"]
-      ):
-        continue
-
-      clean_snippet = (
-          summary[:140] + "..."
-          if len(summary) > 140
-          else (summary if summary else title)
-      )
-
-      raw_articles.append({
-          "title": title,
-          "link": link,
-          "summary_raw": summary,
-          "snippet": clean_snippet,
-          "source": source_name,
-          "time": time_ago,
-      })
-
-  # If category is Sports or Global, return directly without risky AI filtering overhead
-  if category_name in ["Latvian Sports", "Global News"]:
-    return raw_articles[:30]
-
-# If category is Sports or Global, return items directly
-  if category_name in ["Latvian Sports", "Global News"]:
-    return raw_articles[:30] if raw_articles else []
-
-  # For Major News, filter out sports keywords cleanly
-  cleaned_news = []
-  for item in raw_articles:
-    t_lower = item["title"].lower()
-    if any(sport_term in t_lower for sport_term in ["sports", "hokejs", "basketbols", "teniss", "wta", "fiiba", "spēle"]):
-      continue
-    cleaned_news.append(item)
-
-  return cleaned_news if cleaned_news else raw_articles[:30]
-
-
-# Session State Initialization
-if "selected_cat" not in st.session_state:
-  st.session_state.selected_cat = "Latvian Major News"
-
-if "visible_counts" not in st.session_state:
-  st.session_state.visible_counts = {
-      "Latvian Major News": 5,
-      "Latvian Sports": 5,
-      "Global News": 5,
-  }
-
-# 5. EXACT CATEGORY PILLS ROW MATCHING REFERENCE DESIGN
-col_spacer1, nav1, nav2, nav3, col_spacer2 = st.columns(
-    [0.6, 1.2, 1.2, 1.2, 0.6]
-)
-
-categories = [
-    ("🏛️ Latvian Major News", "Latvian Major News"),
-    ("🏆 Latvian Sports", "Latvian Sports"),
-    ("🌍 Global News", "Global News"),
-]
-nav_cols = [nav1, nav2, nav3]
-
-for col, (display_label, cat_key) in zip(nav_cols, categories):
-  with col:
-    is_active = st.session_state.selected_cat == cat_key
-    if is_active:
-      st.markdown('<div class="active-cat-pill">', unsafe_allow_html=True)
-
-    if st.button(display_label, key=f"cat_pill_{cat_key}"):
-      st.session_state.selected_cat = cat_key
-      st.rerun()
-
-    if is_active:
-      st.markdown("</div>", unsafe_allow_html=True)
-
-st.markdown(
-    "<div style='margin-bottom: 1.8rem;'></div>", unsafe_allow_html=True
-)
-
-# 6. Centered Main Content Stream
-active_cat = st.session_state.selected_cat
-articles = load_curated_headlines(tuple(FEEDS[active_cat]), active_cat)
-visible_count = st.session_state.visible_counts[active_cat]
-
-left_space, center_feed, right_space = st.columns([1, 2.5, 1])
-
-with center_feed:
-  displayed_articles = articles[:visible_count]
-
-  for i, article in enumerate(displayed_articles):
-    time_str = f" • {article['time']}" if article["time"] else ""
-
-    st.markdown(
-        f"""
-        <div class="news-card-box">
-            <div class="card-meta">
-                <span class="source-badge">{article['source']}</span>
-                <span>{time_str}</span>
-            </div>
-            <div class="card-title">{article['title']}</div>
-            <div class="card-snippet">{article['snippet']}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    b1, b2 = st.columns([1, 1])
-    with b1:
-      st.markdown(
-          f"<div style='padding-top: 0.2rem;'><a class='article-link'"
-          f" href='{article['link']}' target='_blank'>🔗 Read Full"
-          " Article</a></div>",
-          unsafe_allow_html=True,
-      )
-    with b2:
-      st.markdown('<div class="ai-btn-wrap">', unsafe_allow_html=True)
-      if st.button("✨ AI Summary", key=f"btn_{active_cat}_{i}"):
-        if client:
-          with st.spinner("Analyzing context..."):
-            success = False
-            prompt = (
-                "Summarize the core facts of this news piece concisely in 3"
-                " bullet points. Focus strictly on major details: "
-                f"{article['title']} -- {article['summary_raw']}"
-            )
-            for model_name in ["gemini-2.5-flash", "gemini-2.5-flash-lite"]:
-              try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=prompt,
-                )
-                st.info(response.text)
-                success = True
-                break
-              except Exception:
+            if any(bad_word in title.lower() for bad_word in ["tests", "kura sēne", "horoskops", "zodiaka"]):
                 continue
-            if not success:
-              st.info(
-                  "✨ **AI Summary Snapshot:**\n\n"
-                  f"- **Core Topic:** {article['title']}\n"
-                  f"- **Details:** {article['snippet']}\n"
-                  "- *(Note: Live AI server traffic is currently peaking, showing fallback local summary).*",
-                  icon="ℹ️",
-              )
-        else:
-          st.error("API client not initialized.")
-      st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown(
-        "<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True
-    )
+            clean_snippet = (
+                summary[:140] + "..."
+                if len(summary) > 140
+                else (summary if summary else title)
+            )
 
-  # Load More Button - safely stays active across expansions
-  if visible_count < len(articles):
-    st.write("")
-    st.markdown(
-        '<div class="ai-btn-wrap" style="text-align: center;">',
-        unsafe_allow_html=True,
-    )
-    if st.button("🔽 Load More (+5 Articles)", key=f"load_more_{active_cat}"):
-      st.session_state.visible_counts[active_cat] += 5
-      st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+            raw_articles.append({
+                "title": title,
+                "link": link,
+                "summary_raw": summary,
+                "snippet": clean_snippet,
+                "source": source_name,
+                "time": time_ago,
+                "timestamp": pub_time
+            })
+
+    # Sort strictly from newest to oldest using timestamps
+    raw_articles.sort(key=lambda x: x["timestamp"], reverse=True)
+
+    if category_name in ["Latvian Sports", "Global News"]:
+        return raw_articles[:40] if raw_articles else []
+
+    # Filter out sports from Major News
+    cleaned_news = []
+    for item in raw_articles:
+        t_lower = item["title"].lower()
+        if any(sport_term in t_lower for sport_term in ["sports", "hokejs", "basketbols", "teniss", "wta", "fiiba", "spēle"]):
+            continue
+        cleaned_news.append(item)
+
+    return cleaned_news if cleaned_news else raw_articles[:40]
