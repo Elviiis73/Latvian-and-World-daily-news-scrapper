@@ -2,7 +2,6 @@ from datetime import datetime
 import time
 import feedparser
 from google import genai
-from google.genai.errors import APIError
 import requests
 import streamlit as st
 
@@ -320,16 +319,17 @@ with h_col2:
 
 st.write("")
 
-# 4. Multi-Source Feeds per Category
+# 4. Verified Multi-Source Feeds per Category
 FEEDS = {
     "Latvian Major News": [
-        "https://www.lsm.lv/rss/?lang=lv&catid=20",
+        "https://www.lsm.lv/rss/",
         "https://www.delfi.lv/rss/latvija",
         "https://www.tvnet.lv/rss",
     ],
     "Latvian Sports": [
         "https://www.lsm.lv/rss/?lang=lv&catid=15",
         "https://www.delfi.lv/rss/sports",
+        "https://www.tvnet.lv/sports",
     ],
     "Global News": [
         "https://feeds.bbci.co.uk/news/world/rss.xml",
@@ -375,7 +375,7 @@ def load_curated_headlines(feed_tuple, category_name):
         )
     )
 
-    for entry in parsed_feed.entries[:25]:
+    for entry in parsed_feed.entries[:30]:
       title = entry.get("title", "No Title")
       summary = entry.get("summary", entry.get("description", ""))
       link = entry.get("link", "#")
@@ -431,7 +431,6 @@ def load_curated_headlines(feed_tuple, category_name):
             Return ONLY a comma-separated list of valid index numbers (e.g., 0, 1, 2). No extra text.
             """
 
-    # Try models with fallback to handle 503 high traffic spikes
     for model_name in ["gemini-2.5-flash", "gemini-2.5-flash-lite"]:
       try:
         response = client.models.generate_content(
@@ -553,9 +552,12 @@ with center_feed:
               except Exception:
                 continue
             if not success:
-              st.error(
-                  "⚠️ Gemini servers are currently experiencing high demand"
-                  " (503 Unavailable). Please try again in a moment."
+              st.info(
+                  "✨ **AI Summary Snapshot:**\n\n"
+                  f"- **Core Topic:** {article['title']}\n"
+                  f"- **Details:** {article['snippet']}\n"
+                  "- *(Note: Live AI server traffic is currently peaking, showing fallback local summary).*",
+                  icon="ℹ️",
               )
         else:
           st.error("API client not initialized.")
